@@ -1,0 +1,2 @@
+# O código roda em Linux (container): manter finais de linha LF mesmo no Windows.
+* text=auto eol=lf
