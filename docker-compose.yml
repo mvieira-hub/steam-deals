@@ -1,0 +1,35 @@
+# Tudo roda em container: a máquina só precisa do Docker.
+#   docker compose up -d                                 liga o bot (volta sozinho quando o Docker inicia)
+#   docker compose logs -f bot                           acompanha o que ele está fazendo
+#   docker compose down                                  desliga
+#   docker compose run --rm bot node src/index.ts --uma-vez   roda um ciclo agora e sai
+#   docker compose run --rm bot node src/spike.ts        tabela de diagnóstico, sem gravar nada
+#   docker compose run --rm bot npm test                 testes
+# O Node 24 executa TypeScript direto (type stripping): não há etapa de build.
+# O banco fica em ./data (fora do git).
+name: steam-deals
+
+services:
+  bot:
+    image: node:24-alpine
+    working_dir: /app
+    command: ["node", "src/index.ts"]
+    restart: unless-stopped
+    # Processo init de verdade: repassa o SIGTERM do `docker stop` e o bot encerra na hora.
+    init: true
+    environment:
+      TZ: America/Sao_Paulo
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+volumes:
+  node_modules:
