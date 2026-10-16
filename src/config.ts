@@ -29,6 +29,7 @@ export const config = {
   intervaloHoras: inteiro("INTERVALO_HORAS", 2, 1, 24),
   bancoCaminho: process.env.BANCO_CAMINHO || "data/steam-deals.db",
   calendarioCaminho: process.env.CALENDARIO_CAMINHO || "config/eventos-steam.json",
+  alvosCaminho: process.env.ALVOS_CAMINHO || "config/precos-alvo.json",
   resumoAcimaDe: inteiro("RESUMO_ACIMA_DE", 5, 1, 50),
   regras: {
     margemPertoPct: inteiro("MARGEM_PERTO_PCT", 10, 0, 100),

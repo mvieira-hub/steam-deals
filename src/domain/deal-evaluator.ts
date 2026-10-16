@@ -30,17 +30,27 @@ export interface Oferta {
   reviewPct: number | null;
   steamLowCents: number | null;
   anyStoreLowCents: number | null;
+  /** Preço-alvo que você definiu para o jogo, se houver. */
+  alvoCents?: number | null;
 }
 
 export interface Avaliacao {
   selo: Selo;
   alertar: boolean;
+  /** Preço atual está igual ou abaixo do seu preço-alvo. */
+  atingiuAlvo?: boolean;
   /** Por que não alerta, quando o selo sozinho alertaria (filtro de desconto ou nota). */
   barradoPor?: string;
 }
 
 export function avaliar(o: Oferta, r: Regras): Avaliacao {
   const selo = calcularSelo(o, r);
+
+  // Preço-alvo é escolha explícita sua: alerta mesmo sem desconto e sem passar pelos filtros.
+  if (o.alvoCents != null && o.finalCents !== null && o.finalCents <= o.alvoCents) {
+    return { selo, alertar: true, atingiuAlvo: true };
+  }
+
   const candidato =
     selo === "MENOR_PRECO" ||
     selo === "PERTO_DO_MENOR" ||

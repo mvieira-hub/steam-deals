@@ -1,0 +1,5 @@
+{
+  "_comentario": "Preço-alvo por jogo: quando o preço na Steam ficar igual ou abaixo de 'ate' (em reais), o bot avisa, mesmo que não seja o menor preço da história e mesmo sem desconto. 'jogo' pode ser o link da loja ou o número do app. 'nome' é só para você se achar. Vale também para jogos fora da wishlist. O bot relê este arquivo a cada verificação: não precisa reiniciar.",
+  "_exemplo": { "jogo": "https://store.steampowered.com/app/1174180/Red_Dead_Redemption_2/", "nome": "Red Dead Redemption 2", "ate": 50.0 },
+  "alvos": []
+}

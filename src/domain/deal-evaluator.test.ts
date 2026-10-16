@@ -72,3 +72,22 @@ describe("alerta", () => {
     assert.equal(avaliar(oferta({ reviewPct: null }), regras).alertar, true);
   });
 });
+
+describe("preço-alvo", () => {
+  it("abaixo do alvo alerta mesmo com selo 🔴", () => {
+    const r = avaliar(oferta({ finalCents: 20000, alvoCents: 20000 }), PADRAO);
+    assert.equal(r.selo, "FALSA_OFERTA");
+    assert.equal(r.alertar, true);
+    assert.equal(r.atingiuAlvo, true);
+  });
+
+  it("alvo ignora os filtros de desconto mínimo e de nota", () => {
+    const regras = { ...PADRAO, descontoMinPct: 50, reviewMinPct: 90 };
+    const r = avaliar(oferta({ discountPct: 10, reviewPct: 40, alvoCents: 10000 }), regras);
+    assert.equal(r.alertar, true);
+  });
+
+  it("um centavo acima do alvo não conta", () => {
+    assert.equal(avaliar(oferta({ finalCents: 20001, alvoCents: 20000 }), PADRAO).atingiuAlvo, undefined);
+  });
+});

@@ -1,12 +1,13 @@
 // O bot. Sem argumentos: fica rodando e verifica a cada INTERVALO_HORAS.
 // Com --uma-vez: roda um ciclo e sai (útil para testar ou para um cron externo).
 
+import { carregarAlvos } from "./alvos/precos-alvo.ts";
 import { config } from "./config.ts";
 import { abrirBanco } from "./db/database.ts";
 import { ultimaExecucaoOk } from "./db/repositorio.ts";
 import { carregarCalendario } from "./eventos/calendario.ts";
 import { executarCiclo, type Dependencias } from "./jobs/verificar-ofertas.ts";
-import { log } from "./lib/log.ts";
+import { log, mensagemDeErro } from "./lib/log.ts";
 import { DiscordDmNotifier } from "./notifiers/discord/discord-dm.ts";
 import { ItadClient } from "./providers/itad/itad-client.ts";
 import { getStorePrices, getWishlist } from "./providers/steam/steam-client.ts";
@@ -28,6 +29,17 @@ if (proximo) {
   log.warn(`Calendário sem eventos futuros: atualize ${config.calendarioCaminho} para receber avisos de promoções.`);
 }
 
+// Relido a cada ciclo. Arquivo com erro não para os alertas: segue com a última versão válida.
+let alvosValidos = new Map<number, number>();
+function lerAlvos(): Map<number, number> {
+  try {
+    alvosValidos = carregarAlvos(config.alvosCaminho);
+  } catch (err) {
+    log.error(`Preços-alvo não atualizados, usando a última versão válida: ${mensagemDeErro(err)}`);
+  }
+  return alvosValidos;
+}
+
 const deps: Dependencias = {
   db,
   steam: { getWishlist, getStorePrices },
@@ -39,6 +51,7 @@ const deps: Dependencias = {
   regras: config.regras,
   eventos,
   resumoAcimaDe: config.resumoAcimaDe,
+  alvos: lerAlvos,
   log,
 };
 

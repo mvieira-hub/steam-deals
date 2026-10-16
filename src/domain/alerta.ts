@@ -16,6 +16,9 @@ export interface Alerta {
   outraLojaNome: string | null;
   reviewPct: number | null;
   reviewLabel: string | null;
+  /** Seu preço-alvo para o jogo, quando houver; atingiuAlvo = o preço atual chegou nele. */
+  alvoCents?: number | null;
+  atingiuAlvo?: boolean;
 }
 
 /**

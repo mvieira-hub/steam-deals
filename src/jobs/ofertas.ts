@@ -13,9 +13,16 @@ export interface LinhaOferta {
   alerta: Alerta | null;
 }
 
-export function montarOfertas(precos: StorePrice[], menores: Map<number, HistoricalLow>, regras: Regras): LinhaOferta[] {
+export function montarOfertas(
+  precos: StorePrice[],
+  menores: Map<number, HistoricalLow>,
+  regras: Regras,
+  /** appid → preço-alvo em centavos. */
+  alvos: Map<number, number> = new Map(),
+): LinhaOferta[] {
   return precos.map((p) => {
     const menor = menores.get(p.appid);
+    const alvoCents = alvos.get(p.appid) ?? null;
     const avaliacao = avaliar(
       {
         finalCents: p.finalCents,
@@ -23,6 +30,7 @@ export function montarOfertas(precos: StorePrice[], menores: Map<number, Histori
         reviewPct: p.reviewPct,
         steamLowCents: menor?.steamLowCents ?? null,
         anyStoreLowCents: menor?.anyStoreLowCents ?? null,
+        alvoCents,
       },
       regras,
     );
@@ -43,6 +51,8 @@ export function montarOfertas(precos: StorePrice[], menores: Map<number, Histori
             outraLojaNome: menor?.anyStoreName ?? null,
             reviewPct: p.reviewPct,
             reviewLabel: p.reviewLabel,
+            alvoCents,
+            atingiuAlvo: avaliacao.atingiuAlvo ?? false,
           }
         : null;
     return { preco: p, menor, avaliacao, alerta };

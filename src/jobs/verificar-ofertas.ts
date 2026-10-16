@@ -33,6 +33,8 @@ export interface Dependencias {
   eventos: EventoSteam[];
   /** Acima deste número de ofertas numa mensagem, elas vão numa lista compacta em vez de cards. */
   resumoAcimaDe: number;
+  /** Preços-alvo atuais (appid → centavos). Chamado a cada ciclo: editar o arquivo vale sem reiniciar. */
+  alvos: () => Map<number, number>;
   log: Log;
   agora?: () => Date;
 }
@@ -45,6 +47,8 @@ export interface Resumo {
   itad: "ok" | "cache" | "desligado";
   /** Fase de evento avisada neste ciclo, ex.: "winter-2026:inicio". */
   evento: string | null;
+  /** Quantos preços-alvo estão configurados. */
+  alvos: number;
 }
 
 export async function verificarOfertas(d: Dependencias): Promise<Resumo> {
@@ -52,14 +56,16 @@ export async function verificarOfertas(d: Dependencias): Promise<Resumo> {
 
   const wishlist = await d.steam.getWishlist(d.steamId);
   repo.salvarWishlist(d.db, d.steamId, wishlist, agora);
-  const appids = wishlist.map((w) => w.appid);
+  // Jogos com preço-alvo são acompanhados mesmo fora da wishlist.
+  const alvos = d.alvos();
+  const appids = [...new Set([...wishlist.map((w) => w.appid), ...alvos.keys()])];
 
   const precos = appids.length ? await d.steam.getStorePrices(appids, d.country) : [];
   const precosMudaram = repo.registrarPrecos(d.db, precos, agora);
 
   const { menores, itad } = await buscarMenores(d, appids, agora);
 
-  const ofertas = montarOfertas(precos, menores, d.regras);
+  const ofertas = montarOfertas(precos, menores, d.regras, alvos);
   let alertasNovos = 0;
   for (const { alerta } of ofertas) {
     if (alerta && repo.enfileirar(d.db, d.destino, alerta, agora)) alertasNovos++;
@@ -70,7 +76,7 @@ export async function verificarOfertas(d: Dependencias): Promise<Resumo> {
     emPromocao: precos.filter((p) => p.discountPct > 0).length,
   };
   const { enviados, evento } = await despachar(d, agora, contexto);
-  return { jogos: appids.length, precosMudaram, alertasNovos, enviados, itad, evento };
+  return { jogos: wishlist.length, precosMudaram, alertasNovos, enviados, itad, evento, alvos: alvos.size };
 }
 
 /** ITAD fora do ar não pode parar o bot: usa o último menor preço salvo no banco. */
@@ -157,6 +163,7 @@ export async function executarCiclo(d: Dependencias): Promise<boolean> {
     const resumo =
       `${r.jogos} jogos · ${r.precosMudaram} preço(s) mudaram · ${r.alertasNovos} alerta(s) novo(s) · ` +
       `${r.enviados} enviado(s) · ITAD ${r.itad}` +
+      (r.alvos ? ` · ${r.alvos} preço(s)-alvo` : "") +
       (r.evento ? ` · evento ${r.evento}` : "");
     repo.terminarExecucao(d.db, id, true, resumo, agora());
     d.log.info(`Ciclo ok: ${resumo}`);

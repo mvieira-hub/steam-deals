@@ -39,12 +39,16 @@ function cenario(db: Db) {
     enviados: [] as Mensagem[],
     agora: new Date("2026-10-16T12:00:00Z"),
     eventos: [] as EventoSteam[],
+    alvos: new Map<number, number>(),
+    /** Jogos na wishlist; por padrão, todos os de `precos`. */
+    wishlist: null as number[] | null,
   };
   const deps: Dependencias = {
     db,
     steam: {
-      getWishlist: async () => estado.precos.map((p) => ({ appid: p.appid, priority: 0, addedAt: new Date("2024-01-01") })),
-      getStorePrices: async () => estado.precos,
+      getWishlist: async () =>
+        (estado.wishlist ?? estado.precos.map((p) => p.appid)).map((appid) => ({ appid, priority: 0, addedAt: new Date("2024-01-01") })),
+      getStorePrices: async (appids) => estado.precos.filter((p) => appids.includes(p.appid)),
     },
     itad: {
       getLows: async () => {
@@ -66,6 +70,7 @@ function cenario(db: Db) {
       return estado.eventos;
     },
     resumoAcimaDe: 5,
+    alvos: () => estado.alvos,
     log: logMudo,
     agora: () => estado.agora,
   };
@@ -242,5 +247,38 @@ describe("eventos e resumo", () => {
     assert.equal(r.enviados, 7);
     assert.equal(estado.enviados.length, 1);
     assert.equal(estado.enviados[0]!.formato, "lista");
+  });
+});
+
+describe("preço-alvo", () => {
+  let db: Db;
+  beforeEach(() => (db = abrirBanco(":memory:")));
+
+  it("avisa jogo fora da wishlist quando chega no alvo", async () => {
+    const { estado, deps } = cenario(db);
+    estado.wishlist = [2];
+    estado.alvos = new Map([[1, 1500]]);
+    const r = await verificarOfertas(deps);
+    assert.equal(r.jogos, 1, "a wishlist continua com 1 jogo");
+    assert.equal(r.enviados, 1);
+    const alerta = estado.enviados[0]!.alertas[0]!;
+    assert.equal(alerta.appid, 1);
+    assert.equal(alerta.atingiuAlvo, true);
+    assert.equal(alerta.alvoCents, 1500);
+  });
+
+  it("avisa sem desconto quando o preço cheio fica abaixo do alvo", async () => {
+    const { estado, deps } = cenario(db);
+    estado.alvos = new Map([[2, 5000]]);
+    const r = await verificarOfertas(deps);
+    assert.ok(estado.enviados[0]!.alertas.some((a) => a.appid === 2 && a.atingiuAlvo));
+    assert.equal(r.alertasNovos, 2, "jogo 1 pelo selo 🟢, jogo 2 pelo alvo");
+  });
+
+  it("acima do alvo segue as regras normais", async () => {
+    const { estado, deps } = cenario(db);
+    estado.alvos = new Map([[2, 3000]]);
+    await verificarOfertas(deps);
+    assert.ok(!estado.enviados[0]!.alertas.some((a) => a.appid === 2));
   });
 });

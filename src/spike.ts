@@ -1,6 +1,7 @@
 // Diagnóstico: mostra em tabela o que o bot veria agora, sem gravar nada.
 // Com --enviar, manda os alertas por DM (ignora o banco: pode repetir). O bot de verdade é o src/index.ts.
 
+import { carregarAlvos } from "./alvos/precos-alvo.ts";
 import { config } from "./config.ts";
 import { SELO_LABEL } from "./domain/deal-evaluator.ts";
 import { mensagemOfertas } from "./domain/mensagens.ts";
@@ -35,7 +36,8 @@ async function main() {
       `referência ${r.referencia} · sem histórico só com -${r.semHistoricoMinPct}%+\n`,
   );
 
-  const appids = await appidsParaTestar();
+  const alvos = carregarAlvos(config.alvosCaminho);
+  const appids = [...new Set([...(await appidsParaTestar()), ...alvos.keys()])];
   if (appids.length === 0) return console.log("Wishlist vazia.");
 
   const precos = await getStorePrices(appids, config.country);
@@ -46,7 +48,7 @@ async function main() {
     console.warn("⚠️  Sem ITAD_API_KEY: menor preço histórico desligado.\n");
   }
 
-  const ofertas = montarOfertas(precos, menores, r);
+  const ofertas = montarOfertas(precos, menores, r, alvos);
   console.table(
     ofertas
       .map(({ preco: p, menor, avaliacao }) => ({
@@ -58,7 +60,8 @@ async function main() {
         reviews: p.reviewPct != null ? `${p.reviewPct}%` : "—",
         "termina em": p.discountEndsAt?.toLocaleDateString("pt-BR") ?? "",
         selo: SELO_LABEL[avaliacao.selo],
-        alerta: avaliacao.alertar ? "🔔" : (avaliacao.barradoPor ?? ""),
+        alvo: alvos.has(p.appid) ? brl(alvos.get(p.appid)!) : "",
+        alerta: avaliacao.atingiuAlvo ? "🔔🎯" : avaliacao.alertar ? "🔔" : (avaliacao.barradoPor ?? ""),
       }))
       .sort((a, b) => a.selo.localeCompare(b.selo)),
   );
