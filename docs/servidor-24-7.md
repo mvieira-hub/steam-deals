@@ -28,28 +28,38 @@ A Oracle pode **recuperar VMs "Always Free" ociosas**: se, em 7 dias, a CPU fica
 
 ## 3. Criar a VM
 
+**3.1 Chave SSH, gerada no seu PC** (a privada nunca passa pelo navegador). No **PowerShell**:
+
+```powershell
+mkdir $HOME\.ssh -Force
+ssh-keygen -t ed25519 -C steam-deals-oracle -f $HOME\.ssh\oracle-steam-deals -N '""'
+# O SSH recusa chave que outros usuários do Windows possam ler:
+icacls $HOME\.ssh\oracle-steam-deals /inheritance:r /grant:r "$($env:USERNAME):(R,W)"
+Get-Content $HOME\.ssh\oracle-steam-deals.pub   # esta é a pública: copie a linha
+```
+
+**3.2 Rede, antes da VM.** O console atual só deixa ligar o IP público da VM numa sub-rede pública **que já exista**; criar a rede junto com a VM deixa o botão do IP desativado. Então:
+Menu ☰ → **Networking** → **Virtual cloud networks** → **Actions** → **Start VCN Wizard** → **Create VCN with Internet Connectivity** → nome `steam-deals-vcn`, resto no padrão → **Next** → **Create**. (VCN, sub-redes e gateways não têm custo.)
+
+**3.3 A VM.**
+
 1. Menu ☰ → **Compute** → **Instances** → **Create instance**.
 2. **Name:** `steam-deals`.
-3. **Image and shape** → **Edit**:
-   - **Image:** **Change image** → **Ubuntu** → **Canonical Ubuntu 24.04** (não a "Minimal").
-   - **Shape:** **Change shape** → **Virtual machine** → **Specialty and previous generation** → **VM.Standard.E2.1.Micro**. Tem que aparecer a etiqueta **Always Free-eligible**.
-4. **Networking:** deixe criar uma **nova VCN** com **sub-rede pública** e marque **Assign a public IPv4 address**.
-5. **Add SSH keys:** **Generate a key pair for me** → **Save private key**. Guarde o arquivo baixado (é a chave para entrar no servidor).
-6. **Boot volume:** pode deixar o padrão (~47 GB, dentro dos 200 GB gratuitos).
-7. **Create**. Em ~1 minuto o estado fica **Running**. Anote o **Public IP address** da página da instância.
+3. **Image:** **Change image** → **Ubuntu** → **Canonical Ubuntu 24.04** (não a "Minimal") → **Select image**.
+4. **Shape:** confira **VM.Standard.E2.1.Micro** com a etiqueta **Always Free-eligible** (costuma vir como padrão; senão: **Change shape** → **Specialty and previous generation**).
+5. **Networking:** **Select existing virtual cloud network** → `steam-deals-vcn` e sub-rede `public subnet-steam-deals-vcn`. **Automatically assign public IPv4 address** fica ligado.
+6. **Add SSH keys:** **Paste public key** → cole a linha do passo 3.1.
+7. **Storage:** padrão (~47 GB, dentro dos 200 GB gratuitos).
+8. **Create**. Em ~1 minuto o estado fica **Running**. Anote o **Public IP address** (seção **Instance access**; usuário `ubuntu`).
 
 > Se aparecer **"Out of host capacity"**, faltou VM gratuita em São Paulo naquele momento. Tente de novo mais tarde.
 
 ## 4. Conectar do seu PC
 
-No **PowerShell** do Windows (o cliente SSH já vem com o Windows 11). Troque `Downloads\ssh-key-*.key` pelo arquivo que você baixou e `IP_DO_SERVIDOR` pelo IP anotado.
+No **PowerShell** (troque `IP_DO_SERVIDOR` pelo IP anotado). O SSH só responde 1–2 minutos depois do "Running".
 
 ```powershell
-mkdir $HOME\.ssh -Force
-move $HOME\Downloads\ssh-key-*.key $HOME\.ssh\oracle-steam-deals.key
-# O SSH recusa chave que outros usuários do Windows possam ler:
-icacls $HOME\.ssh\oracle-steam-deals.key /inheritance:r /grant:r "$($env:USERNAME):(R)"
-ssh -i $HOME\.ssh\oracle-steam-deals.key ubuntu@IP_DO_SERVIDOR
+ssh -i $HOME\.ssh\oracle-steam-deals ubuntu@IP_DO_SERVIDOR
 ```
 
 Na primeira vez ele pergunta se confia no servidor: responda `yes`. O prompt muda para `ubuntu@steam-deals:~$` — você está no servidor. **Os passos 5 e 6 são digitados aí.**
@@ -110,8 +120,8 @@ docker compose exec bot node src/backup.ts
 docker compose down
 
 # 3) Envia o .env (tokens e chaves) e o banco direto para o servidor, sem passar pelo chat nem pelo git
-scp -i $HOME\.ssh\oracle-steam-deals.key .env ubuntu@IP_DO_SERVIDOR:~/steam-deals/.env
-scp -i $HOME\.ssh\oracle-steam-deals.key data\steam-deals-backup.db ubuntu@IP_DO_SERVIDOR:~/steam-deals/data/steam-deals.db
+scp -i $HOME\.ssh\oracle-steam-deals .env ubuntu@IP_DO_SERVIDOR:~/steam-deals/.env
+scp -i $HOME\.ssh\oracle-steam-deals data\steam-deals-backup.db ubuntu@IP_DO_SERVIDOR:~/steam-deals/data/steam-deals.db
 ```
 
 ## 8. Ligar no servidor
@@ -145,10 +155,10 @@ Ainda no servidor:
 (crontab -l 2>/dev/null; echo "0 4 * * * docker compose -f /home/ubuntu/steam-deals/docker-compose.prod.yml exec -T bot node src/backup.ts >/dev/null 2>&1") | crontab -
 ```
 
-Todo dia às 4h (horário do servidor) ele atualiza `data/steam-deals-backup.db`. De vez em quando, traga uma cópia para o PC:
+Todo dia às 4h UTC (1h da manhã em Brasília) ele atualiza `data/steam-deals-backup.db`. De vez em quando, traga uma cópia para o PC:
 
 ```powershell
-scp -i $HOME\.ssh\oracle-steam-deals.key ubuntu@IP_DO_SERVIDOR:~/steam-deals/data/steam-deals-backup.db C:\Users\Administrador\Documents\GitHub\steam-deals\data\
+scp -i $HOME\.ssh\oracle-steam-deals ubuntu@IP_DO_SERVIDOR:~/steam-deals/data/steam-deals-backup.db C:\Users\Administrador\Documents\GitHub\steam-deals\data\
 ```
 
 ---
@@ -157,7 +167,7 @@ scp -i $HOME\.ssh\oracle-steam-deals.key ubuntu@IP_DO_SERVIDOR:~/steam-deals/dat
 
 | Para… | Comando |
 |---|---|
-| Entrar no servidor (do PC) | `ssh -i $HOME\.ssh\oracle-steam-deals.key ubuntu@IP_DO_SERVIDOR` |
+| Entrar no servidor (do PC) | `ssh -i $HOME\.ssh\oracle-steam-deals ubuntu@IP_DO_SERVIDOR` |
 | Ver o log | `bot logs -f` |
 | Atualizar o código | `cd ~/steam-deals && git pull && bot up -d --build` |
 | Mudar uma opção do `.env` | `nano ~/steam-deals/.env` e depois `bot restart` |
@@ -178,7 +188,7 @@ bot exec bot node src/backup.ts && bot down
 cd C:\Users\Administrador\Documents\GitHub\steam-deals
 # Arquivos auxiliares do banco antigo do PC: não podem se misturar com o banco que vem do servidor
 Remove-Item data\steam-deals.db-wal, data\steam-deals.db-shm -ErrorAction SilentlyContinue
-scp -i $HOME\.ssh\oracle-steam-deals.key ubuntu@IP_DO_SERVIDOR:~/steam-deals/data/steam-deals-backup.db data\steam-deals.db
+scp -i $HOME\.ssh\oracle-steam-deals ubuntu@IP_DO_SERVIDOR:~/steam-deals/data/steam-deals-backup.db data\steam-deals.db
 docker compose up -d
 ```
 
@@ -187,7 +197,7 @@ docker compose up -d
 | Sintoma | Solução |
 |---|---|
 | `Out of host capacity` ao criar a VM | Falta momentânea de VM gratuita em São Paulo: tente mais tarde |
-| `WARNING: UNPROTECTED PRIVATE KEY FILE!` | Rode o `icacls` do passo 4 |
+| `WARNING: UNPROTECTED PRIVATE KEY FILE!` | Rode o `icacls` do passo 3.1 |
 | `Permission denied (publickey)` no `ssh` | Usuário errado (é `ubuntu`) ou chave errada no `-i` |
 | `permission denied ... docker.sock` | Saia e entre de novo no servidor depois do `usermod` (passo 5) |
 | `Permission denied (publickey)` no `git clone` | A deploy key não foi adicionada no GitHub (passo 6) |
