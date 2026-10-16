@@ -23,6 +23,7 @@ A Oracle pode **recuperar VMs "Always Free" ociosas**: se, em 7 dias, a CPU fica
 
 - **Converter a conta para "Pay As You Go"**: é o caminho mais citado para evitar a recuperação; os recursos Always Free continuam sem custo. A documentação da Oracle não confirma explicitamente essa isenção, por isso o passo 9 também deixa um **backup automático diário**.
   Menu ☰ → **Billing & Cost Management** → **Upgrade and Manage Payment** → **Upgrade to Pay As You Go**.
+  **Não há como voltar** para a conta só gratuita depois. A partir daí, qualquer recurso que **não** seja Always Free é cobrado no cartão — por isso o alerta de orçamento abaixo. Se preferir não converter, o bot funciona igual; o risco é só a VM ser recuperada e você recriá-la com o backup.
 - **Se converter, crie um alerta de orçamento** para ser avisado de qualquer centavo: Menu ☰ → **Billing & Cost Management** → **Budgets** → **Create Budget** → valor **1** (na moeda da conta) → alerta por e-mail em **1%**.
 
 ## 3. Criar a VM
