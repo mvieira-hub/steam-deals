@@ -1,0 +1,29 @@
+{
+  "_comentario": "Promoções da Steam. Fonte: https://partner.steamgames.com/doc/marketing/upcoming_events . Começam e terminam às 10h do horário do Pacífico (-07:00 no horário de verão americano, -08:00 fora dele). Atualize duas vezes por ano; o bot avisa no log quando não houver evento futuro.",
+  "eventos": [
+    {
+      "id": "scream-2026",
+      "nome": "Steam Scream V (Halloween)",
+      "inicio": "2026-10-26T10:00:00-07:00",
+      "fim": "2026-11-02T10:00:00-08:00"
+    },
+    {
+      "id": "winter-2026",
+      "nome": "Winter Sale 2026",
+      "inicio": "2026-12-17T10:00:00-08:00",
+      "fim": "2027-01-04T10:00:00-08:00"
+    },
+    {
+      "id": "spring-2027",
+      "nome": "Spring Sale 2027",
+      "inicio": "2027-03-18T10:00:00-07:00",
+      "fim": "2027-03-25T10:00:00-07:00"
+    },
+    {
+      "id": "summer-2027",
+      "nome": "Summer Sale 2027",
+      "inicio": "2027-06-24T10:00:00-07:00",
+      "fim": "2027-07-08T10:00:00-07:00"
+    }
+  ]
+}

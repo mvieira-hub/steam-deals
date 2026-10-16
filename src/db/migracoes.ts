@@ -63,4 +63,15 @@ export const MIGRACOES: string[] = [
     resumo       TEXT
   );
   `,
+
+  /* 2 */ `
+  -- Cada fase de um evento (lembrete, início, último dia) é avisada uma vez por destino.
+  CREATE TABLE eventos_avisados (
+    destino    TEXT NOT NULL,
+    evento_id  TEXT NOT NULL,
+    fase       TEXT NOT NULL,
+    enviado_em TEXT NOT NULL,
+    PRIMARY KEY (destino, evento_id, fase)
+  );
+  `,
 ];

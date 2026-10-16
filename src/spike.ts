@@ -3,6 +3,7 @@
 
 import { config } from "./config.ts";
 import { SELO_LABEL } from "./domain/deal-evaluator.ts";
+import { mensagemOfertas } from "./domain/mensagens.ts";
 import { montarOfertas } from "./jobs/ofertas.ts";
 import { brl } from "./lib/format.ts";
 import { DiscordDmNotifier } from "./notifiers/discord/discord-dm.ts";
@@ -67,7 +68,9 @@ async function main() {
   if (!config.discordBotToken || !config.discordUserId) {
     throw new Error("Para --enviar, preencha DISCORD_BOT_TOKEN e DISCORD_USER_ID no .env.");
   }
-  await new DiscordDmNotifier(config.discordBotToken, config.discordUserId).enviar(alertas);
+  await new DiscordDmNotifier(config.discordBotToken, config.discordUserId).enviar(
+    mensagemOfertas(alertas, config.resumoAcimaDe),
+  );
   console.log(`\n✅ ${alertas.length} alerta(s) enviado(s) por DM.`);
 }
 

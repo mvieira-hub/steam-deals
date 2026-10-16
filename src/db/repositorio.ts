@@ -133,6 +133,23 @@ function lerAlerta(payload: string): Alerta {
   return { ...a, terminaEm: data(a.terminaEm), steamLowEm: data(a.steamLowEm) };
 }
 
+// ---------- eventos ----------
+
+export function faseJaAvisada(db: Db, destino: string, eventoId: string, fase: string): boolean {
+  return !!db
+    .prepare("SELECT 1 FROM eventos_avisados WHERE destino = ? AND evento_id = ? AND fase = ?")
+    .get(destino, eventoId, fase);
+}
+
+export function registrarFaseAvisada(db: Db, destino: string, eventoId: string, fase: string, agora: Date): void {
+  db.prepare("INSERT OR IGNORE INTO eventos_avisados (destino, evento_id, fase, enviado_em) VALUES (?, ?, ?, ?)").run(
+    destino,
+    eventoId,
+    fase,
+    agora.toISOString(),
+  );
+}
+
 // ---------- execuções ----------
 
 export function iniciarExecucao(db: Db, agora: Date): number {

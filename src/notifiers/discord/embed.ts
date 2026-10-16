@@ -26,6 +26,34 @@ export interface DiscordEmbed {
   footer: { text: string };
 }
 
+const SELO_ICONE: Partial<Record<Selo, string>> = { MENOR_PRECO: "🟢", PERTO_DO_MENOR: "🟡", SEM_HISTORICO: "⚪" };
+/** Limite do Discord para a descrição de um embed. */
+const LIMITE_DESCRICAO = 4096;
+
+/** Muitas ofertas num bloco só: uma linha por jogo, melhores primeiro. */
+export function montarLista(alertas: Alerta[]): { description: string; color: number; footer: { text: string } } {
+  const ordem: Selo[] = ["MENOR_PRECO", "PERTO_DO_MENOR", "SEM_HISTORICO"];
+  const ordenados = [...alertas].sort((a, b) => ordem.indexOf(a.selo) - ordem.indexOf(b.selo) || b.discountPct - a.discountPct);
+
+  const linhas: string[] = [];
+  let tamanho = 0;
+  for (const [i, a] of ordenados.entries()) {
+    const linha = `${SELO_ICONE[a.selo] ?? "•"} [${a.nome}](${a.url}) — **${brl(a.finalCents)}** \`-${a.discountPct}%\``;
+    const resto = `\n… e mais ${ordenados.length - i}`;
+    if (tamanho + linha.length + 1 + resto.length > LIMITE_DESCRICAO) {
+      linhas.push(resto.trim());
+      break;
+    }
+    linhas.push(linha);
+    tamanho += linha.length + 1;
+  }
+  return {
+    description: linhas.join("\n"),
+    color: COR.MENOR_PRECO!,
+    footer: { text: "🟢 menor preço da história · 🟡 até a margem acima dele · ⚪ sem histórico" },
+  };
+}
+
 /** <t:...:R> o próprio Discord mostra como "em 8 dias", no idioma de quem lê. */
 const tempoRelativo = (d: Date) => `<t:${Math.floor(d.getTime() / 1000)}:R>`;
 

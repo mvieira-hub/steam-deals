@@ -4,6 +4,7 @@
 import { config } from "./config.ts";
 import { abrirBanco } from "./db/database.ts";
 import { ultimaExecucaoOk } from "./db/repositorio.ts";
+import { carregarCalendario } from "./eventos/calendario.ts";
 import { executarCiclo, type Dependencias } from "./jobs/verificar-ofertas.ts";
 import { log } from "./lib/log.ts";
 import { DiscordDmNotifier } from "./notifiers/discord/discord-dm.ts";
@@ -19,6 +20,14 @@ if (!config.itadApiKey) log.warn("Sem ITAD_API_KEY: alertas sem menor preço his
 
 const db = abrirBanco(config.bancoCaminho);
 
+const eventos = carregarCalendario(config.calendarioCaminho);
+const proximo = eventos.filter((e) => e.fim > new Date()).sort((a, b) => +a.inicio - +b.inicio)[0];
+if (proximo) {
+  log.info(`Próximo evento no calendário: ${proximo.nome} (${proximo.inicio.toLocaleDateString("pt-BR")}).`);
+} else {
+  log.warn(`Calendário sem eventos futuros: atualize ${config.calendarioCaminho} para receber avisos de promoções.`);
+}
+
 const deps: Dependencias = {
   db,
   steam: { getWishlist, getStorePrices },
@@ -28,6 +37,8 @@ const deps: Dependencias = {
   steamId: config.steamId,
   country: config.country,
   regras: config.regras,
+  eventos,
+  resumoAcimaDe: config.resumoAcimaDe,
   log,
 };
 

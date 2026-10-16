@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import { abrirBanco, type Db } from "../db/database.ts";
-import type { Alerta } from "../domain/alerta.ts";
+import type { Mensagem } from "../domain/alerta.ts";
+import type { EventoSteam } from "../domain/evento.ts";
 import { logMudo } from "../lib/log.ts";
 import type { HistoricalLow } from "../providers/itad/itad-client.ts";
 import type { StorePrice } from "../providers/steam/steam-client.ts";
@@ -35,7 +36,9 @@ function cenario(db: Db) {
     menores: new Map([[1, menor(1499)], [2, menor(2499)]]),
     itadFalha: false,
     discordFalha: false,
-    enviados: [] as Alerta[][],
+    enviados: [] as Mensagem[],
+    agora: new Date("2026-10-16T12:00:00Z"),
+    eventos: [] as EventoSteam[],
   };
   const deps: Dependencias = {
     db,
@@ -50,16 +53,21 @@ function cenario(db: Db) {
       },
     },
     notifier: {
-      enviar: async (alertas) => {
+      enviar: async (mensagem) => {
         if (estado.discordFalha) throw new Error("Discord fora");
-        estado.enviados.push(alertas);
+        estado.enviados.push(mensagem);
       },
     },
     destino: "discord:123",
     steamId: "765",
     country: "BR",
     regras: { margemPertoPct: 10, descontoMinPct: 0, reviewMinPct: 0, referencia: "steam", semHistoricoMinPct: 50 },
+    get eventos() {
+      return estado.eventos;
+    },
+    resumoAcimaDe: 5,
     log: logMudo,
+    agora: () => estado.agora,
   };
   return { estado, deps };
 }
@@ -73,7 +81,7 @@ describe("verificarOfertas", () => {
     const r1 = await verificarOfertas(deps);
     assert.equal(r1.alertasNovos, 1);
     assert.equal(r1.enviados, 1);
-    assert.equal(estado.enviados[0]![0]!.appid, 1);
+    assert.equal(estado.enviados[0]!.alertas[0]!.appid, 1);
 
     const r2 = await verificarOfertas(deps);
     assert.equal(r2.alertasNovos, 0);
@@ -87,7 +95,7 @@ describe("verificarOfertas", () => {
     estado.precos[0] = preco({ appid: 1, finalCents: 999, discountPct: 83 });
     const r = await verificarOfertas(deps);
     assert.equal(r.alertasNovos, 1);
-    assert.equal(estado.enviados[1]![0]!.finalCents, 999);
+    assert.equal(estado.enviados[1]!.alertas[0]!.finalCents, 999);
   });
 
   it("alerta de novo numa promoção nova, mesmo com o mesmo preço", async () => {
@@ -135,5 +143,104 @@ describe("verificarOfertas", () => {
     const ex = db.prepare("SELECT ok, resumo FROM execucoes").get() as { ok: number; resumo: string };
     assert.equal(ex.ok, 0);
     assert.equal(ex.resumo, "Steam fora");
+  });
+});
+
+describe("eventos e resumo", () => {
+  let db: Db;
+  beforeEach(() => (db = abrirBanco(":memory:")));
+
+  const WINTER: EventoSteam = {
+    id: "winter",
+    nome: "Winter Sale",
+    inicio: new Date("2026-12-17T18:00:00Z"),
+    fim: new Date("2027-01-04T18:00:00Z"),
+  };
+  const horas = (base: Date, h: number) => new Date(base.getTime() + h * 3600_000);
+
+  it("lembrete na véspera: avisa uma vez, separado das ofertas", async () => {
+    const { estado, deps } = cenario(db);
+    estado.eventos = [WINTER];
+    estado.agora = horas(WINTER.inicio, -2);
+
+    const r = await verificarOfertas(deps);
+    assert.equal(r.evento, "winter:lembrete");
+    assert.equal(estado.enviados.length, 2, "lembrete + mensagem da oferta");
+    assert.match(estado.enviados[0]!.titulo, /Amanhã começa a Winter Sale/);
+    assert.equal(estado.enviados[0]!.alertas.length, 0);
+
+    await verificarOfertas(deps);
+    assert.equal(estado.enviados.length, 2, "não repete o lembrete");
+  });
+
+  it("início: as ofertas novas vão dentro do aviso, numa mensagem só", async () => {
+    const { estado, deps } = cenario(db);
+    estado.eventos = [WINTER];
+    estado.agora = horas(WINTER.inicio, 1);
+
+    const r = await verificarOfertas(deps);
+    assert.equal(r.evento, "winter:inicio");
+    assert.equal(r.enviados, 1);
+    assert.equal(estado.enviados.length, 1);
+    assert.match(estado.enviados[0]!.titulo, /Começou a Winter Sale/);
+    assert.equal(estado.enviados[0]!.alertas[0]!.appid, 1);
+
+    await verificarOfertas(deps);
+    assert.equal(estado.enviados.length, 1, "nem o aviso nem a oferta se repetem");
+  });
+
+  it("bot desligado na véspera: pula o lembrete e avisa o início", async () => {
+    const { estado, deps } = cenario(db);
+    estado.eventos = [WINTER];
+    estado.agora = horas(WINTER.inicio, 30);
+    assert.equal((await verificarOfertas(deps)).evento, "winter:inicio");
+  });
+
+  it("último dia: lembra o que ainda vale a pena, mesmo já avisado", async () => {
+    const { estado, deps } = cenario(db);
+    estado.eventos = [WINTER];
+    estado.agora = horas(WINTER.inicio, 1);
+    await verificarOfertas(deps);
+
+    estado.agora = horas(WINTER.fim, -2);
+    const r = await verificarOfertas(deps);
+    assert.equal(r.evento, "winter:ultimo_dia");
+    assert.match(estado.enviados[1]!.titulo, /Último dia da Winter Sale/);
+    assert.equal(estado.enviados[1]!.alertas[0]!.appid, 1);
+
+    await verificarOfertas(deps);
+    assert.equal(estado.enviados.length, 2, "não repete o último dia");
+  });
+
+  it("último dia sem nada que valha a pena: não manda mensagem", async () => {
+    const { estado, deps } = cenario(db);
+    estado.eventos = [WINTER];
+    estado.precos = [preco({ appid: 2, finalCents: 4999, originalCents: 4999, discountPct: 0, discountEndsAt: null })];
+    estado.agora = horas(WINTER.fim, -2);
+    await verificarOfertas(deps);
+    assert.equal(estado.enviados.length, 0);
+  });
+
+  it("Discord fora no início do evento: tenta de novo no ciclo seguinte", async () => {
+    const { estado, deps } = cenario(db);
+    estado.eventos = [WINTER];
+    estado.agora = horas(WINTER.inicio, 1);
+    estado.discordFalha = true;
+    assert.equal((await verificarOfertas(deps)).evento, null);
+
+    estado.discordFalha = false;
+    const r = await verificarOfertas(deps);
+    assert.equal(r.evento, "winter:inicio");
+    assert.equal(r.enviados, 1);
+  });
+
+  it("muitas ofertas de uma vez viram uma lista só", async () => {
+    const { estado, deps } = cenario(db);
+    estado.precos = Array.from({ length: 7 }, (_, i) => preco({ appid: 10 + i }));
+    estado.menores = new Map(estado.precos.map((p) => [p.appid, menor(1499)]));
+    const r = await verificarOfertas(deps);
+    assert.equal(r.enviados, 7);
+    assert.equal(estado.enviados.length, 1);
+    assert.equal(estado.enviados[0]!.formato, "lista");
   });
 });

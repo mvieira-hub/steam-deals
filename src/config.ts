@@ -28,6 +28,8 @@ export const config = {
   discordUserId: process.env.DISCORD_USER_ID ?? "",
   intervaloHoras: inteiro("INTERVALO_HORAS", 2, 1, 24),
   bancoCaminho: process.env.BANCO_CAMINHO || "data/steam-deals.db",
+  calendarioCaminho: process.env.CALENDARIO_CAMINHO || "config/eventos-steam.json",
+  resumoAcimaDe: inteiro("RESUMO_ACIMA_DE", 5, 1, 50),
   regras: {
     margemPertoPct: inteiro("MARGEM_PERTO_PCT", 10, 0, 100),
     descontoMinPct: inteiro("DESCONTO_MIN_PCT", 0, 0, 99),

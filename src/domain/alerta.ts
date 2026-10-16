@@ -28,7 +28,16 @@ export function chaveAlerta(a: Pick<Alerta, "appid" | "finalCents" | "terminaEm"
   return `${a.appid}:${a.finalCents}:${fim}`;
 }
 
+/** O que vai para o canal de uma vez: um título, um texto opcional e as ofertas. */
+export interface Mensagem {
+  titulo: string;
+  texto?: string;
+  alertas: Alerta[];
+  /** cards: um bloco visual por jogo. lista: todos numa lista compacta (muitas ofertas de uma vez). */
+  formato: "cards" | "lista";
+}
+
 /** Porta de saída: cada canal de notificação implementa esta interface. */
 export interface Notifier {
-  enviar(alertas: Alerta[]): Promise<void>;
+  enviar(mensagem: Mensagem): Promise<void>;
 }
