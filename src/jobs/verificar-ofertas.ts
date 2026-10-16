@@ -155,7 +155,7 @@ function unirPorJogo(principal: Alerta[], extra: Alerta[]): Alerta[] {
 }
 
 /** Roda um ciclo registrando a execução no banco. Nunca lança: erro vira log e execução com ok = 0. */
-export async function executarCiclo(d: Dependencias): Promise<boolean> {
+export async function executarCiclo(d: Dependencias): Promise<{ ok: boolean; resumo: string }> {
   const agora = d.agora ?? (() => new Date());
   const id = repo.iniciarExecucao(d.db, agora());
   try {
@@ -167,10 +167,10 @@ export async function executarCiclo(d: Dependencias): Promise<boolean> {
       (r.evento ? ` · evento ${r.evento}` : "");
     repo.terminarExecucao(d.db, id, true, resumo, agora());
     d.log.info(`Ciclo ok: ${resumo}`);
-    return true;
+    return { ok: true, resumo };
   } catch (err) {
     repo.terminarExecucao(d.db, id, false, mensagemDeErro(err), agora());
     d.log.error(`Ciclo falhou: ${mensagemDeErro(err)}`);
-    return false;
+    return { ok: false, resumo: mensagemDeErro(err) };
   }
 }

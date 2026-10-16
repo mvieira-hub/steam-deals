@@ -7,6 +7,7 @@ import { SELO_LABEL } from "./domain/deal-evaluator.ts";
 import { mensagemOfertas } from "./domain/mensagens.ts";
 import { montarOfertas } from "./jobs/ofertas.ts";
 import { brl } from "./lib/format.ts";
+import { DiscordRest } from "./discord/rest.ts";
 import { DiscordDmNotifier } from "./notifiers/discord/discord-dm.ts";
 import { ItadClient, type HistoricalLow } from "./providers/itad/itad-client.ts";
 import { getStorePrices, getWishlist, WishlistPrivadaError } from "./providers/steam/steam-client.ts";
@@ -71,7 +72,7 @@ async function main() {
   if (!config.discordBotToken || !config.discordUserId) {
     throw new Error("Para --enviar, preencha DISCORD_BOT_TOKEN e DISCORD_USER_ID no .env.");
   }
-  await new DiscordDmNotifier(config.discordBotToken, config.discordUserId).enviar(
+  await new DiscordDmNotifier(new DiscordRest(config.discordBotToken), config.discordUserId).enviar(
     mensagemOfertas(alertas, config.resumoAcimaDe),
   );
   console.log(`\n✅ ${alertas.length} alerta(s) enviado(s) por DM.`);

@@ -74,4 +74,16 @@ export const MIGRACOES: string[] = [
     PRIMARY KEY (destino, evento_id, fase)
   );
   `,
+
+  /* 3 */ `
+  -- Preços-alvo definidos pelo Discord (/alvo). Somam-se aos do arquivo config/precos-alvo.json.
+  CREATE TABLE precos_alvo (
+    destino    TEXT NOT NULL,
+    appid      INTEGER NOT NULL,
+    nome       TEXT NOT NULL,
+    alvo_cents INTEGER NOT NULL,
+    criado_em  TEXT NOT NULL,
+    PRIMARY KEY (destino, appid)
+  );
+  `,
 ];

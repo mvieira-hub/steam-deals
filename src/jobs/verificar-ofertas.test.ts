@@ -144,7 +144,7 @@ describe("verificarOfertas", () => {
     deps.steam.getWishlist = async () => {
       throw new Error("Steam fora");
     };
-    assert.equal(await executarCiclo(deps), false);
+    assert.deepEqual(await executarCiclo(deps), { ok: false, resumo: "Steam fora" });
     const ex = db.prepare("SELECT ok, resumo FROM execucoes").get() as { ok: number; resumo: string };
     assert.equal(ex.ok, 0);
     assert.equal(ex.resumo, "Steam fora");

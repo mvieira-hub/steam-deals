@@ -150,6 +150,46 @@ export function registrarFaseAvisada(db: Db, destino: string, eventoId: string, 
   );
 }
 
+// ---------- preços-alvo (definidos pelo Discord) ----------
+
+export interface AlvoSalvo {
+  appid: number;
+  nome: string;
+  alvoCents: number;
+}
+
+export function definirAlvo(db: Db, destino: string, alvo: AlvoSalvo, agora: Date): void {
+  db.prepare(`
+    INSERT INTO precos_alvo (destino, appid, nome, alvo_cents, criado_em) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (destino, appid) DO UPDATE SET nome = excluded.nome, alvo_cents = excluded.alvo_cents`).run(
+    destino,
+    alvo.appid,
+    alvo.nome,
+    alvo.alvoCents,
+    agora.toISOString(),
+  );
+}
+
+/** Devolve false se não havia alvo para o jogo. */
+export function removerAlvo(db: Db, destino: string, appid: number): boolean {
+  return Number(db.prepare("DELETE FROM precos_alvo WHERE destino = ? AND appid = ?").run(destino, appid).changes) > 0;
+}
+
+export function listarAlvos(db: Db, destino: string): AlvoSalvo[] {
+  const linhas = db
+    .prepare("SELECT appid, nome, alvo_cents FROM precos_alvo WHERE destino = ? ORDER BY nome")
+    .all(destino) as { appid: number; nome: string; alvo_cents: number }[];
+  return linhas.map((l) => ({ appid: l.appid, nome: l.nome, alvoCents: l.alvo_cents }));
+}
+
+/** Jogos já vistos pelo bot (wishlist ou alvos) cujo nome contém o texto, para achar jogo pelo nome. */
+export function buscarJogosPorNome(db: Db, texto: string): { appid: number; nome: string }[] {
+  const linhas = db
+    .prepare("SELECT appid, nome FROM jogos WHERE nome LIKE ? ORDER BY length(nome) LIMIT 10")
+    .all(`%${texto.trim()}%`) as { appid: number; nome: string }[];
+  return linhas.map((l) => ({ appid: l.appid, nome: l.nome }));
+}
+
 // ---------- execuções ----------
 
 export function iniciarExecucao(db: Db, agora: Date): number {
