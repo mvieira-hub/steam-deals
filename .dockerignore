@@ -1,0 +1,6 @@
+.git
+.env
+.claude
+data
+node_modules
+**/*.test.ts

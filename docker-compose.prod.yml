@@ -1,0 +1,26 @@
+# Produção (servidor 24/7). Roteiro: docs/servidor-24-7.md
+#   docker compose -f docker-compose.prod.yml up -d --build     liga (e reconstrói depois de um git pull)
+#   docker compose -f docker-compose.prod.yml logs -f bot       acompanha
+#   docker compose -f docker-compose.prod.yml down              desliga
+# ⚠️ Nunca rode o bot no servidor e no PC ao mesmo tempo: os alertas e os comandos chegariam em dobro.
+name: steam-deals
+
+services:
+  bot:
+    build: .
+    image: steam-deals:latest
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      # Editar o calendário ou os preços-alvo no servidor vale sem reconstruir a imagem.
+      - ./config:/app/config:ro
+    # Protege a VM pequena (1 GB): o bot usa ~35 MB.
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

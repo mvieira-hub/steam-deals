@@ -78,7 +78,9 @@ Steam → seu perfil → **Editar perfil → Configurações de privacidade** �
 docker compose up -d
 ```
 
-Pronto. O bot volta sozinho quando o Docker inicia. Para ver o que ele está fazendo:
+Pronto. O bot volta sozinho quando o Docker inicia — mas só roda com o PC ligado. Para deixá-lo 24/7 de graça numa VM da Oracle Cloud, siga o [roteiro do servidor](docs/servidor-24-7.md).
+
+Para ver o que ele está fazendo:
 
 ```bash
 docker compose logs -f bot
@@ -176,7 +178,7 @@ O arquivo é relido a cada verificação (não precisa reiniciar). Se o mesmo jo
 | Log: *"Gateway do Discord recusou a conexão (código 4004)"* | Token inválido ou redefinido: atualize `DISCORD_BOT_TOKEN` e `docker compose restart` |
 | Comandos não aparecem | Recarregue o Discord (Ctrl+R); confira no log *"Comandos do Discord ativos"* |
 | O bot não voltou depois de ligar o PC | Ele foi parado manualmente (botão Stop no Docker Desktop ou `docker compose stop`). Rode `docker compose up -d` |
-| Alertas chegam atrasados | O bot só roda com o PC ligado e acordado. Desligue a suspensão do Windows na tomada ou rode num servidor |
+| Alertas chegam atrasados | O bot só roda com o PC ligado e acordado. Desligue a suspensão do Windows na tomada ou [rode num servidor 24/7](docs/servidor-24-7.md) |
 
 ---
 
