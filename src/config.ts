@@ -30,6 +30,8 @@ export const config = {
   discordComandos: process.env.DISCORD_COMANDOS !== "0",
   /** Máximo de pessoas cadastradas pelo /cadastrar (o dono sempre entra). */
   maxUsuarios: inteiro("MAX_USUARIOS", 30, 1, 500),
+  /** URL de "estou vivo" (ex.: Healthchecks.io): o bot avisa ao fim de cada ciclo ok. Vazio = desligado. */
+  monitorUrl: process.env.MONITOR_URL ?? "",
   intervaloHoras: inteiro("INTERVALO_HORAS", 2, 1, 24),
   bancoCaminho: process.env.BANCO_CAMINHO || "data/steam-deals.db",
   calendarioCaminho: process.env.CALENDARIO_CAMINHO || "config/eventos-steam.json",

@@ -38,6 +38,8 @@ export interface Dependencias {
   resumoAcimaDe: number;
   /** Preços-alvo de uma pessoa (appid → centavos). Chamado a cada ciclo. */
   alvos: (destino: string) => Map<number, number>;
+  /** Avisado ao fim de cada ciclo ok (monitor externo). Opcional. */
+  monitor?: { ok(): Promise<void> };
   log: Log;
   agora?: () => Date;
 }
@@ -243,6 +245,7 @@ export async function executarCiclo(d: Dependencias): Promise<ResultadoCiclo> {
       `${r.alertasNovos} alerta(s) novo(s) · ${r.enviados} enviado(s) · ITAD ${r.itad}`;
     repo.terminarExecucao(d.db, id, true, resumo, agora());
     d.log.info(`Ciclo ok: ${resumo}`);
+    await d.monitor?.ok();
     return { ok: true, resumo, porUsuario: r.porUsuario };
   } catch (err) {
     repo.terminarExecucao(d.db, id, false, mensagemDeErro(err), agora());

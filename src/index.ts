@@ -12,6 +12,7 @@ import { DiscordRest } from "./discord/rest.ts";
 import { carregarCalendario } from "./eventos/calendario.ts";
 import { executarCiclo, type Dependencias, type ResultadoCiclo } from "./jobs/verificar-ofertas.ts";
 import { log, mensagemDeErro } from "./lib/log.ts";
+import { criarMonitor } from "./lib/monitor.ts";
 import { DiscordDmNotifier } from "./notifiers/discord/discord-dm.ts";
 import { ItadClient } from "./providers/itad/itad-client.ts";
 import { getStorePrices, getWishlist, resolverPerfil } from "./providers/steam/steam-client.ts";
@@ -69,6 +70,7 @@ const deps: Dependencias = {
   eventos,
   resumoAcimaDe: config.resumoAcimaDe,
   alvos: lerAlvos,
+  monitor: criarMonitor(config.monitorUrl, log),
   log,
 };
 
