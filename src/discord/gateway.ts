@@ -104,7 +104,7 @@ export class Gateway {
       this.sessao = d.session_id;
       this.urlRetomada = d.resume_gateway_url;
       this.tentativas = 0;
-      this.o.log.info("Comandos do Discord ativos (/verificar, /alvo).");
+      this.o.log.info("Comandos do Discord ativos (/cadastrar, /verificar, /alvo, /descadastrar, /usuarios).");
     } else if (tipo === "RESUMED") {
       this.tentativas = 0;
     } else if (tipo === "INTERACTION_CREATE") {

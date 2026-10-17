@@ -37,21 +37,60 @@ export function caminhoDoPerfil(texto: string): string | null {
   return null;
 }
 
-/** Descobre o SteamID64 e o nome do perfil pelo XML público da comunidade (sem API key). */
-export async function resolverPerfil(texto: string): Promise<PerfilSteam> {
+export class PerfilNaoEncontradoError extends Error {
+  constructor() {
+    super("Perfil da Steam não encontrado. Confira o link.");
+  }
+}
+
+export class SteamLimitandoError extends Error {
+  constructor() {
+    super(
+      "A Steam está limitando consultas de perfil neste momento. Tente de novo em alguns minutos " +
+        "(ou mande o link do perfil com número: steamcommunity.com/profiles/...).",
+    );
+  }
+}
+
+type Buscar = (url: string) => Promise<Response>;
+type Esperar = (ms: number) => Promise<void>;
+const dormir: Esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+/** A página de perfil da comunidade às vezes responde 429 para servidores na nuvem: tenta de novo com pausas. */
+const ESPERAS_APOS_429 = [1_000, 3_000, 6_000];
+
+/**
+ * Descobre o SteamID64 e o nome do perfil pelo XML público da comunidade (sem API key).
+ * Se a pessoa mandou o número, ele já basta: a página serve só para pegar o nome, e falhar nela
+ * (ex.: 429) não impede o cadastro.
+ */
+export async function resolverPerfil(texto: string, buscar: Buscar = fetch, esperar: Esperar = dormir): Promise<PerfilSteam> {
   const caminho = caminhoDoPerfil(texto);
   if (!caminho) {
     throw new Error("Não reconheci esse perfil. Mande o link do perfil (steamcommunity.com/id/... ou /profiles/...).");
   }
-  const res = await fetch(`https://steamcommunity.com/${caminho}/?xml=1`);
-  if (!res.ok) throw new Error(`A Steam respondeu ${res.status} ao consultar o perfil.`);
-  return lerPerfilXml(await res.text());
+  const numero = caminho.startsWith("profiles/") ? caminho.slice("profiles/".length) : null;
+  try {
+    return lerPerfilXml(await buscarXml(caminho, buscar, esperar));
+  } catch (err) {
+    if (numero && !(err instanceof PerfilNaoEncontradoError)) return { steamId: numero, nome: numero };
+    throw err;
+  }
+}
+
+async function buscarXml(caminho: string, buscar: Buscar, esperar: Esperar): Promise<string> {
+  for (let tentativa = 0; ; tentativa++) {
+    const res = await buscar(`https://steamcommunity.com/${caminho}/?xml=1`);
+    if (res.ok) return res.text();
+    if (res.status !== 429) throw new Error(`A Steam respondeu ${res.status} ao consultar o perfil.`);
+    if (tentativa >= ESPERAS_APOS_429.length) throw new SteamLimitandoError();
+    await esperar(ESPERAS_APOS_429[tentativa]!);
+  }
 }
 
 export function lerPerfilXml(xml: string): PerfilSteam {
   const campo = (nome: string) =>
     xml.match(new RegExp(`<${nome}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${nome}>`))?.[1]?.trim();
-  if (campo("error")) throw new Error("Perfil da Steam não encontrado. Confira o link.");
+  if (campo("error")) throw new PerfilNaoEncontradoError();
   const steamId = campo("steamID64");
   if (!steamId) throw new Error("Não consegui ler esse perfil da Steam.");
   return { steamId, nome: campo("steamID") ?? steamId };
