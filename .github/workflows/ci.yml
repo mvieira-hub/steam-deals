@@ -1,0 +1,28 @@
+# Checagem de tipos + testes a cada push/PR. Sem rede: os testes usam mocks e SQLite em memória.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Instalar devDependencies (TypeScript + @types/node)
+        run: npm install --no-audit --no-fund
+
+      - name: Checagem de tipos
+        run: npx tsc
+
+      - name: Testes
+        run: npm test
