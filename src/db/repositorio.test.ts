@@ -31,3 +31,30 @@ describe("preços-alvo no banco", () => {
     assert.deepEqual(repo.buscarJogosPorNome(db, "red dead"), [{ appid: 1, nome: "Red Dead Redemption 2" }]);
   });
 });
+
+describe("usuários", () => {
+  let db: Db;
+  const agora = new Date("2026-10-17T12:00:00Z");
+  beforeEach(() => (db = abrirBanco(":memory:")));
+
+  it("salvar, atualizar e listar", () => {
+    repo.salvarUsuario(db, { discordId: "1", steamId: "a", nomeSteam: "A" }, agora);
+    repo.salvarUsuario(db, { discordId: "1", steamId: "b", nomeSteam: "B" }, agora);
+    assert.deepEqual(repo.listarUsuarios(db), [{ discordId: "1", steamId: "b", nomeSteam: "B" }]);
+  });
+
+  it("apagar remove alvos, alertas e wishlist da pessoa, sem tocar nos outros", () => {
+    repo.salvarUsuario(db, { discordId: "1", steamId: "s1", nomeSteam: null }, agora);
+    repo.salvarUsuario(db, { discordId: "2", steamId: "s2", nomeSteam: null }, agora);
+    repo.definirAlvo(db, "discord:1", { appid: 10, nome: "J", alvoCents: 100 }, agora);
+    repo.definirAlvo(db, "discord:2", { appid: 10, nome: "J", alvoCents: 100 }, agora);
+    repo.salvarWishlist(db, "s1", [{ appid: 10, priority: 0, addedAt: agora }], agora);
+
+    assert.equal(repo.apagarUsuario(db, "1"), true);
+    assert.equal(repo.buscarUsuario(db, "1"), null);
+    assert.equal(repo.listarAlvos(db, "discord:1").length, 0);
+    assert.equal(repo.listarAlvos(db, "discord:2").length, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) n FROM wishlist WHERE steam_id = 's1'").get() as { n: number }).n, 0);
+    assert.equal(repo.apagarUsuario(db, "1"), false);
+  });
+});

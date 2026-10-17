@@ -86,4 +86,15 @@ export const MIGRACOES: string[] = [
     PRIMARY KEY (destino, appid)
   );
   `,
+
+  /* 4 */ `
+  -- Quem usa o bot. O dono (DISCORD_USER_ID + STEAM_ID do .env) entra automaticamente;
+  -- os demais se cadastram com /cadastrar. destino = 'discord:<discord_id>'.
+  CREATE TABLE usuarios (
+    discord_id TEXT PRIMARY KEY,
+    steam_id   TEXT NOT NULL,
+    nome_steam TEXT,
+    criado_em  TEXT NOT NULL
+  );
+  `,
 ];

@@ -190,6 +190,59 @@ export function buscarJogosPorNome(db: Db, texto: string): { appid: number; nome
   return linhas.map((l) => ({ appid: l.appid, nome: l.nome }));
 }
 
+// ---------- usuários ----------
+
+export interface Usuario {
+  discordId: string;
+  steamId: string;
+  nomeSteam: string | null;
+}
+
+export const destinoDe = (discordId: string) => `discord:${discordId}`;
+
+export function salvarUsuario(db: Db, u: Usuario, agora: Date): void {
+  db.prepare(`
+    INSERT INTO usuarios (discord_id, steam_id, nome_steam, criado_em) VALUES (?, ?, ?, ?)
+    ON CONFLICT (discord_id) DO UPDATE SET steam_id = excluded.steam_id, nome_steam = excluded.nome_steam`).run(
+    u.discordId,
+    u.steamId,
+    u.nomeSteam,
+    agora.toISOString(),
+  );
+}
+
+export function buscarUsuario(db: Db, discordId: string): Usuario | null {
+  const r = db.prepare("SELECT discord_id, steam_id, nome_steam FROM usuarios WHERE discord_id = ?").get(discordId) as
+    | { discord_id: string; steam_id: string; nome_steam: string | null }
+    | undefined;
+  return r ? { discordId: r.discord_id, steamId: r.steam_id, nomeSteam: r.nome_steam } : null;
+}
+
+export function listarUsuarios(db: Db): Usuario[] {
+  const linhas = db.prepare("SELECT discord_id, steam_id, nome_steam FROM usuarios ORDER BY criado_em").all() as {
+    discord_id: string;
+    steam_id: string;
+    nome_steam: string | null;
+  }[];
+  return linhas.map((r) => ({ discordId: r.discord_id, steamId: r.steam_id, nomeSteam: r.nome_steam }));
+}
+
+/** Apaga o usuário e tudo que é dele: alvos, alertas, avisos de evento e a wishlist (se ninguém mais usa o perfil). */
+export function apagarUsuario(db: Db, discordId: string): boolean {
+  const u = buscarUsuario(db, discordId);
+  if (!u) return false;
+  const destino = destinoDe(discordId);
+  transacao(db, () => {
+    db.prepare("DELETE FROM usuarios WHERE discord_id = ?").run(discordId);
+    db.prepare("DELETE FROM precos_alvo WHERE destino = ?").run(destino);
+    db.prepare("DELETE FROM notificacoes WHERE destino = ?").run(destino);
+    db.prepare("DELETE FROM eventos_avisados WHERE destino = ?").run(destino);
+    const outros = db.prepare("SELECT 1 FROM usuarios WHERE steam_id = ?").get(u.steamId);
+    if (!outros) db.prepare("DELETE FROM wishlist WHERE steam_id = ?").run(u.steamId);
+  });
+  return true;
+}
+
 // ---------- execuções ----------
 
 export function iniciarExecucao(db: Db, agora: Date): number {

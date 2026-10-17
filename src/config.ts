@@ -28,6 +28,8 @@ export const config = {
   discordUserId: process.env.DISCORD_USER_ID ?? "",
   /** Comandos /verificar e /alvo na DM. DISCORD_COMANDOS=0 desliga (o bot só envia). */
   discordComandos: process.env.DISCORD_COMANDOS !== "0",
+  /** Máximo de pessoas cadastradas pelo /cadastrar (o dono sempre entra). */
+  maxUsuarios: inteiro("MAX_USUARIOS", 30, 1, 500),
   intervaloHoras: inteiro("INTERVALO_HORAS", 2, 1, 24),
   bancoCaminho: process.env.BANCO_CAMINHO || "data/steam-deals.db",
   calendarioCaminho: process.env.CALENDARIO_CAMINHO || "config/eventos-steam.json",

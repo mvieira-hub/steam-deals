@@ -15,6 +15,50 @@ export class WishlistPrivadaError extends Error {
   }
 }
 
+// ---------- perfil ----------
+
+export interface PerfilSteam {
+  steamId: string;
+  nome: string;
+}
+
+/**
+ * Transforma o que a pessoa colou no caminho do perfil na comunidade Steam. Aceita:
+ * link /profiles/<número>, link /id/<nome>, só o número (SteamID64) ou só o nome personalizado.
+ */
+export function caminhoDoPerfil(texto: string): string | null {
+  const t = texto.trim();
+  if (/^7656\d{13}$/.test(t)) return `profiles/${t}`;
+  const porNumero = t.match(/steamcommunity\.com\/profiles\/(7656\d{13})/i);
+  if (porNumero) return `profiles/${porNumero[1]}`;
+  const porNome = t.match(/steamcommunity\.com\/id\/([^/?#\s]+)/i);
+  if (porNome) return `id/${porNome[1]}`;
+  if (/^[\w.-]{2,32}$/.test(t)) return `id/${t}`;
+  return null;
+}
+
+/** Descobre o SteamID64 e o nome do perfil pelo XML público da comunidade (sem API key). */
+export async function resolverPerfil(texto: string): Promise<PerfilSteam> {
+  const caminho = caminhoDoPerfil(texto);
+  if (!caminho) {
+    throw new Error("Não reconheci esse perfil. Mande o link do perfil (steamcommunity.com/id/... ou /profiles/...).");
+  }
+  const res = await fetch(`https://steamcommunity.com/${caminho}/?xml=1`);
+  if (!res.ok) throw new Error(`A Steam respondeu ${res.status} ao consultar o perfil.`);
+  return lerPerfilXml(await res.text());
+}
+
+export function lerPerfilXml(xml: string): PerfilSteam {
+  const campo = (nome: string) =>
+    xml.match(new RegExp(`<${nome}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${nome}>`))?.[1]?.trim();
+  if (campo("error")) throw new Error("Perfil da Steam não encontrado. Confira o link.");
+  const steamId = campo("steamID64");
+  if (!steamId) throw new Error("Não consegui ler esse perfil da Steam.");
+  return { steamId, nome: campo("steamID") ?? steamId };
+}
+
+// ---------- wishlist ----------
+
 export interface WishlistItem {
   appid: number;
   priority: number;

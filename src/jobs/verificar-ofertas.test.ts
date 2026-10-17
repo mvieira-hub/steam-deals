@@ -56,14 +56,13 @@ function cenario(db: Db) {
         return estado.menores;
       },
     },
-    notifier: {
+    usuarios: () => [{ discordId: "123", steamId: "765", nomeSteam: "Dono" }],
+    notifierPara: () => ({
       enviar: async (mensagem) => {
         if (estado.discordFalha) throw new Error("Discord fora");
         estado.enviados.push(mensagem);
       },
-    },
-    destino: "discord:123",
-    steamId: "765",
+    }),
     country: "BR",
     regras: { margemPertoPct: 10, descontoMinPct: 0, reviewMinPct: 0, referencia: "steam", semHistoricoMinPct: 50 },
     get eventos() {
@@ -141,10 +140,12 @@ describe("verificarOfertas", () => {
 
   it("executarCiclo registra a execução e não lança erro", async () => {
     const { deps } = cenario(db);
-    deps.steam.getWishlist = async () => {
+    deps.steam.getStorePrices = async () => {
       throw new Error("Steam fora");
     };
-    assert.deepEqual(await executarCiclo(deps), { ok: false, resumo: "Steam fora" });
+    const r = await executarCiclo(deps);
+    assert.equal(r.ok, false);
+    assert.equal(r.resumo, "Steam fora");
     const ex = db.prepare("SELECT ok, resumo FROM execucoes").get() as { ok: number; resumo: string };
     assert.equal(ex.ok, 0);
     assert.equal(ex.resumo, "Steam fora");
@@ -169,7 +170,7 @@ describe("eventos e resumo", () => {
     estado.agora = horas(WINTER.inicio, -2);
 
     const r = await verificarOfertas(deps);
-    assert.equal(r.evento, "winter:lembrete");
+    assert.equal(r.porUsuario.get("123")!.evento, "winter:lembrete");
     assert.equal(estado.enviados.length, 2, "lembrete + mensagem da oferta");
     assert.match(estado.enviados[0]!.titulo, /Amanhã começa a Winter Sale/);
     assert.equal(estado.enviados[0]!.alertas.length, 0);
@@ -184,7 +185,7 @@ describe("eventos e resumo", () => {
     estado.agora = horas(WINTER.inicio, 1);
 
     const r = await verificarOfertas(deps);
-    assert.equal(r.evento, "winter:inicio");
+    assert.equal(r.porUsuario.get("123")!.evento, "winter:inicio");
     assert.equal(r.enviados, 1);
     assert.equal(estado.enviados.length, 1);
     assert.match(estado.enviados[0]!.titulo, /Começou a Winter Sale/);
@@ -198,7 +199,7 @@ describe("eventos e resumo", () => {
     const { estado, deps } = cenario(db);
     estado.eventos = [WINTER];
     estado.agora = horas(WINTER.inicio, 30);
-    assert.equal((await verificarOfertas(deps)).evento, "winter:inicio");
+    assert.equal((await verificarOfertas(deps)).porUsuario.get("123")!.evento, "winter:inicio");
   });
 
   it("último dia: lembra o que ainda vale a pena, mesmo já avisado", async () => {
@@ -209,7 +210,7 @@ describe("eventos e resumo", () => {
 
     estado.agora = horas(WINTER.fim, -2);
     const r = await verificarOfertas(deps);
-    assert.equal(r.evento, "winter:ultimo_dia");
+    assert.equal(r.porUsuario.get("123")!.evento, "winter:ultimo_dia");
     assert.match(estado.enviados[1]!.titulo, /Último dia da Winter Sale/);
     assert.equal(estado.enviados[1]!.alertas[0]!.appid, 1);
 
@@ -231,11 +232,11 @@ describe("eventos e resumo", () => {
     estado.eventos = [WINTER];
     estado.agora = horas(WINTER.inicio, 1);
     estado.discordFalha = true;
-    assert.equal((await verificarOfertas(deps)).evento, null);
+    assert.equal((await verificarOfertas(deps)).porUsuario.get("123")!.evento, null);
 
     estado.discordFalha = false;
     const r = await verificarOfertas(deps);
-    assert.equal(r.evento, "winter:inicio");
+    assert.equal(r.porUsuario.get("123")!.evento, "winter:inicio");
     assert.equal(r.enviados, 1);
   });
 
@@ -259,7 +260,7 @@ describe("preço-alvo", () => {
     estado.wishlist = [2];
     estado.alvos = new Map([[1, 1500]]);
     const r = await verificarOfertas(deps);
-    assert.equal(r.jogos, 1, "a wishlist continua com 1 jogo");
+    assert.equal(r.porUsuario.get("123")!.jogos, 1, "a wishlist continua com 1 jogo");
     assert.equal(r.enviados, 1);
     const alerta = estado.enviados[0]!.alertas[0]!;
     assert.equal(alerta.appid, 1);
@@ -280,5 +281,77 @@ describe("preço-alvo", () => {
     estado.alvos = new Map([[2, 3000]]);
     await verificarOfertas(deps);
     assert.ok(!estado.enviados[0]!.alertas.some((a) => a.appid === 2));
+  });
+});
+
+describe("vários usuários", () => {
+  let db: Db;
+  beforeEach(() => (db = abrirBanco(":memory:")));
+
+  /** Dois amigos com wishlists diferentes; cada um com seu próprio canal. */
+  function doisUsuarios() {
+    const { estado, deps } = cenario(db);
+    const wishlists: Record<string, number[]> = { "765": [1], "999": [1, 2] };
+    const privadas = new Set<string>();
+    const consultasDePreco: number[][] = [];
+    const caixa = new Map<string, Mensagem[]>([["123", []], ["456", []]]);
+    deps.usuarios = () => [
+      { discordId: "123", steamId: "765", nomeSteam: "Dono" },
+      { discordId: "456", steamId: "999", nomeSteam: "Amigo" },
+    ];
+    deps.steam.getWishlist = async (steamId) => {
+      if (privadas.has(steamId)) throw new Error("wishlist privada");
+      return wishlists[steamId]!.map((appid) => ({ appid, priority: 0, addedAt: new Date("2024-01-01") }));
+    };
+    deps.steam.getStorePrices = async (appids) => {
+      consultasDePreco.push([...appids].sort());
+      return estado.precos.filter((p) => appids.includes(p.appid));
+    };
+    deps.notifierPara = (u) => ({ enviar: async (m) => void caixa.get(u.discordId)!.push(m) });
+    return { estado, deps, caixa, privadas, consultasDePreco };
+  }
+
+  it("cada pessoa recebe o alerta na própria DM, com uma consulta de preços só", async () => {
+    const { deps, caixa, consultasDePreco } = doisUsuarios();
+    const r = await verificarOfertas(deps);
+    assert.equal(r.usuarios, 2);
+    assert.deepEqual(consultasDePreco, [[1, 2]], "jogos de todos numa consulta");
+    assert.equal(caixa.get("123")![0]!.alertas[0]!.appid, 1);
+    assert.equal(caixa.get("456")![0]!.alertas[0]!.appid, 1);
+    assert.equal(r.porUsuario.get("456")!.jogos, 2);
+  });
+
+  it("não repete para ninguém, e cada um tem o próprio histórico", async () => {
+    const { deps, caixa } = doisUsuarios();
+    await verificarOfertas(deps);
+    await verificarOfertas(deps);
+    assert.equal(caixa.get("123")!.length, 1);
+    assert.equal(caixa.get("456")!.length, 1);
+  });
+
+  it("wishlist privada de um não atrapalha o outro", async () => {
+    const { deps, caixa, privadas } = doisUsuarios();
+    privadas.add("765");
+    const r = await verificarOfertas(deps);
+    assert.match(r.porUsuario.get("123")!.erro!, /privada/);
+    assert.equal(caixa.get("123")!.length, 0);
+    assert.equal(caixa.get("456")!.length, 1);
+  });
+
+  it("preço-alvo vale só para quem definiu", async () => {
+    const { estado, deps, caixa } = doisUsuarios();
+    deps.alvos = (destino) => (destino === "discord:456" ? new Map([[2, 5000]]) : new Map());
+    await verificarOfertas(deps);
+    assert.ok(caixa.get("456")![0]!.alertas.some((a) => a.appid === 2 && a.atingiuAlvo));
+    assert.ok(!caixa.get("123")![0]!.alertas.some((a) => a.appid === 2));
+    void estado;
+  });
+
+  it("sem ninguém cadastrado, não consulta nada", async () => {
+    const { deps, consultasDePreco } = doisUsuarios();
+    deps.usuarios = () => [];
+    const r = await verificarOfertas(deps);
+    assert.equal(r.usuarios, 0);
+    assert.equal(consultasDePreco.length, 0);
   });
 });

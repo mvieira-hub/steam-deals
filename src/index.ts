@@ -1,4 +1,5 @@
-// O bot. Sem argumentos: fica rodando, verifica a cada INTERVALO_HORAS e atende /verificar e /alvo no Discord.
+// O bot. Sem argumentos: fica rodando, verifica a cada INTERVALO_HORAS para todos os cadastrados
+// e atende os comandos na DM (/cadastrar, /verificar, /alvo...).
 // Com --uma-vez: roda um ciclo e sai (útil para testar ou para um cron externo).
 
 import { carregarAlvos } from "./alvos/precos-alvo.ts";
@@ -9,11 +10,11 @@ import { registrarComandos, tratarInteracao, type ContextoComandos } from "./dis
 import { Gateway } from "./discord/gateway.ts";
 import { DiscordRest } from "./discord/rest.ts";
 import { carregarCalendario } from "./eventos/calendario.ts";
-import { executarCiclo, type Dependencias } from "./jobs/verificar-ofertas.ts";
+import { executarCiclo, type Dependencias, type ResultadoCiclo } from "./jobs/verificar-ofertas.ts";
 import { log, mensagemDeErro } from "./lib/log.ts";
 import { DiscordDmNotifier } from "./notifiers/discord/discord-dm.ts";
 import { ItadClient } from "./providers/itad/itad-client.ts";
-import { getStorePrices, getWishlist } from "./providers/steam/steam-client.ts";
+import { getStorePrices, getWishlist, resolverPerfil } from "./providers/steam/steam-client.ts";
 import { iniciarAgendador } from "./scheduler.ts";
 
 if (!config.discordBotToken || !config.discordUserId) {
@@ -24,7 +25,13 @@ if (!config.itadApiKey) log.warn("Sem ITAD_API_KEY: alertas sem menor preço his
 
 const db = abrirBanco(config.bancoCaminho);
 const rest = new DiscordRest(config.discordBotToken);
-const destino = `discord:${config.discordUserId}`;
+const destinoDoDono = repo.destinoDe(config.discordUserId);
+
+// O dono (do .env) é sempre o primeiro usuário; os outros entram pelo /cadastrar.
+if (!repo.buscarUsuario(db, config.discordUserId)) {
+  repo.salvarUsuario(db, { discordId: config.discordUserId, steamId: config.steamId, nomeSteam: null }, new Date());
+  log.info("Dono cadastrado como primeiro usuário.");
+}
 
 const eventos = carregarCalendario(config.calendarioCaminho);
 const proximo = eventos.filter((e) => e.fim > new Date()).sort((a, b) => +a.inicio - +b.inicio)[0];
@@ -34,7 +41,7 @@ if (proximo) {
   log.warn(`Calendário sem eventos futuros: atualize ${config.calendarioCaminho} para receber avisos de promoções.`);
 }
 
-// Preços-alvo: arquivo config/precos-alvo.json + os definidos pelo /alvo (estes valem mais).
+// Preços-alvo: os definidos pelo /alvo (por pessoa) + o arquivo config/precos-alvo.json (só do dono).
 // O arquivo é relido a cada ciclo; com erro, segue com a última versão válida.
 let alvosDoArquivo = new Map<number, number>();
 function lerAlvosDoArquivo(): Map<number, number> {
@@ -45,8 +52,8 @@ function lerAlvosDoArquivo(): Map<number, number> {
   }
   return alvosDoArquivo;
 }
-function lerAlvos(): Map<number, number> {
-  const alvos = new Map(lerAlvosDoArquivo());
+function lerAlvos(destino: string): Map<number, number> {
+  const alvos = new Map(destino === destinoDoDono ? lerAlvosDoArquivo() : []);
   for (const a of repo.listarAlvos(db, destino)) alvos.set(a.appid, a.alvoCents);
   return alvos;
 }
@@ -55,9 +62,8 @@ const deps: Dependencias = {
   db,
   steam: { getWishlist, getStorePrices },
   itad: config.itadApiKey ? new ItadClient(config.itadApiKey, config.country) : null,
-  notifier: new DiscordDmNotifier(rest, config.discordUserId),
-  destino,
-  steamId: config.steamId,
+  usuarios: () => repo.listarUsuarios(db),
+  notifierPara: (u) => new DiscordDmNotifier(rest, u.discordId),
   country: config.country,
   regras: config.regras,
   eventos,
@@ -73,7 +79,7 @@ if (process.argv.includes("--uma-vez")) {
 }
 
 // Um ciclo por vez: se o /verificar chegar durante o ciclo agendado, espera o mesmo resultado.
-let cicloEmAndamento: Promise<{ ok: boolean; resumo: string }> | null = null;
+let cicloEmAndamento: Promise<ResultadoCiclo> | null = null;
 function rodarCiclo() {
   cicloEmAndamento ??= executarCiclo(deps).finally(() => (cicloEmAndamento = null));
   return cicloEmAndamento;
@@ -98,10 +104,19 @@ if (config.discordComandos) {
       appId: app.id,
       donoId: config.discordUserId,
       rodarCiclo,
+      usuarios: {
+        buscar: (id) => repo.buscarUsuario(db, id),
+        salvar: (u) => repo.salvarUsuario(db, u, new Date()),
+        apagar: (id) => repo.apagarUsuario(db, id),
+        listar: () => repo.listarUsuarios(db),
+        limite: config.maxUsuarios,
+      },
+      resolverPerfil,
+      contarWishlist: async (steamId) => (await getWishlist(steamId)).length,
       alvos: {
-        definir: (a) => repo.definirAlvo(db, destino, a, new Date()),
-        remover: (appid) => repo.removerAlvo(db, destino, appid),
-        doBanco: () => repo.listarAlvos(db, destino),
+        definir: (destino, a) => repo.definirAlvo(db, destino, a, new Date()),
+        remover: (destino, appid) => repo.removerAlvo(db, destino, appid),
+        doBanco: (destino) => repo.listarAlvos(db, destino),
         doArquivo: lerAlvosDoArquivo,
       },
       buscarPorNome: (texto) => repo.buscarJogosPorNome(db, texto),
